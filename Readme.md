@@ -14,7 +14,7 @@
 - Clone the Repo to your local folder
 
 ```bash
-> git clone https://github.com/simorgh1/aws-cf-templates/codestar-sampleapp.git .
+> git clone https://github.com/simorgh1/SampleApp.git .
 ```
 
 - Then run the create repository task in the app-deploy folder
