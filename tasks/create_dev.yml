@@ -1,0 +1,16 @@
+---
+- name: create/update stack
+  cloudformation:
+    stack_name: development
+    state: present
+    template: templates/dev.json
+    template_format: json
+    template_parameters:
+      KeyName: "{{ keyname }}"
+      EC2RoleInstanceProfile: "{{ ec2instanceprofile }}"
+    tags:
+      Environment: dev
+  register: cf_stack
+
+- debug: msg={{ cf_stack }}
+  when: debug is defined

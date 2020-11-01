@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Creates CodeDeploy Infrastructure",
+    "Description": "Creates Pipeline Infrastructure",
     "Parameters":
     {
         "ArtifactStoreS3Location": {
@@ -15,17 +15,17 @@
           "Description": "ServiceRoleArn for CodePipeline",
           "Type": "String",
           "ConstraintDescription": "can contain only ASCII characters."
-      },
-      "CodeDeployServiceRole": {
-        "Description": "ServiceRoleArn for CodeDeploy deployment",
-        "Type": "String",
-        "ConstraintDescription": "can contain only ASCII characters."
-      },
-      "KMSKeyArn": {
-        "Description": "KMS Key for S3 encryption",
-        "Type": "String",
-        "ConstraintDescription": "can contain only ASCII characters."
-      }
+        },
+        "CodeDeployServiceRole": {
+          "Description": "ServiceRoleArn for CodeDeploy deployment",
+          "Type": "String",
+          "ConstraintDescription": "can contain only ASCII characters."
+        },
+        "KMSKeyArn": {
+          "Description": "KMS Key for S3 encryption",
+          "Type": "String",
+          "ConstraintDescription": "can contain only ASCII characters."
+        }
     },
     "Resources":
     {

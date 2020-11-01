@@ -1,0 +1,18 @@
+---
+- name: create/update stack
+  cloudformation:
+    stack_name: deployment
+    state: present
+    template: templates/pipeline.json
+    template_format: json
+    template_parameters:
+      ArtifactStoreS3Location: "{{ artifactstores3 }}"
+      CodePipelineServiceRole: "{{ codepipelineservicerolearn }}"
+      CodeDeployServiceRole: "{{ codedeployservicerolearn }}"
+      KMSKeyArn: "{{ kmskeyarn }}"
+    tags:
+      Environment: dev
+  register: cf_stack
+
+- debug: msg={{ cf_stack }}
+  when: debug is defined
