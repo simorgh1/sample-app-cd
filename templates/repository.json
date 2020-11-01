@@ -1,0 +1,33 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "CodeCommit Repository",
+    "Parameters": {
+        "RepoName": {
+            "Description": "Name of the app Repository",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "255",
+            "AllowedPattern": "[\\x20-\\x7E]*",
+            "ConstraintDescription": "can contain only ASCII characters."
+        }
+    },
+    "Resources":
+    {
+        
+        "codeCommitRepository": {
+           "Type": "AWS::CodeCommit::Repository",
+           "Properties": {
+              "RepositoryDescription": "app Repository",
+              "RepositoryName": { "Ref": "RepoName"}
+          }
+        }
+    },
+    "Outputs":
+    {
+        "Repo":
+        {
+            "Description": "Repository Information",
+            "Value": {"Ref": "codeCommitRepository"}
+        }
+    }
+}

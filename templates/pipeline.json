@@ -1,0 +1,117 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Creates CodeDeploy Infrastructure",
+    "Parameters":
+    {
+        "ArtifactStoreS3Location": {
+            "Description": "Name of S3 used as ArtifactStore",
+            "Type": "String",
+            "MinLength": "3",
+            "MaxLength": "63",
+            "AllowedPattern": "[a-zA-Z0-9\\-\\.]+",
+            "ConstraintDescription": "can contain only ASCII characters."
+        },
+        "CodePipelineServiceRole": {
+          "Description": "ServiceRoleArn for CodePipeline",
+          "Type": "String",
+          "ConstraintDescription": "can contain only ASCII characters."
+      },
+      "CodeDeployServiceRole": {
+        "Description": "ServiceRoleArn for CodeDeploy deployment",
+        "Type": "String",
+        "ConstraintDescription": "can contain only ASCII characters."
+      },
+      "KMSKeyArn": {
+        "Description": "KMS Key for S3 encryption",
+        "Type": "String",
+        "ConstraintDescription": "can contain only ASCII characters."
+      }
+    },
+    "Resources":
+    {
+      "S3Bucket" : {
+        "Type" : "AWS::S3::Bucket",
+	      "DeletionPolicy": "Retain",
+        "Properties" : {
+           "BucketName" : { "Ref": "ArtifactStoreS3Location" }
+         }  
+        },
+        "CodeDeploySampleApp": {
+            "Type": "AWS::CodeDeploy::Application",
+            "Properties": {
+              "ApplicationName": "SampleApp",
+              "ComputePlatform": "Server"
+            }
+          },
+          "DeploymentGroupSampleApp": {
+              "Type": "AWS::CodeDeploy::DeploymentGroup",
+              "Properties":{
+                  "ApplicationName": { "Ref": "CodeDeploySampleApp"},
+                  "DeploymentGroupName": "SampleApp_DG",
+                  "ServiceRoleArn": { "Ref": "CodeDeployServiceRole" },
+                  "DeploymentConfigName": "CodeDeployDefault.OneAtATime",
+                  "Ec2TagFilters" : [
+                      { "Key" : "Name", "Value" : "Sample-instance", "Type" : "KEY_AND_VALUE" }, 
+                      { "Key" : "Environment", "Value" : "Development", "Type" : "KEY_AND_VALUE" }]
+                  }
+          },
+          "CodePipelineSampleApp": {
+            "Type": "AWS::CodePipeline::Pipeline",
+            "Properties" : {
+              "Name" : "MyFirstPipeline",
+              "RoleArn" : { "Ref": "CodePipelineServiceRole" },
+              "Stages" : [
+                {
+                    "Name": "Source",
+                    "Actions": [
+                      {
+                        "Name": "SourceAction",
+                        "ActionTypeId": { 
+                            "Category": "Source", 
+                            "Owner": "AWS",
+                            "Version": "1", 
+                            "Provider": "CodeCommit"
+                        },
+                        "OutputArtifacts": [ { "Name": "SourceOutput" }],
+                        "Configuration": {
+                            "RepositoryName": "MyDemoRepo",
+                            "BranchName": "master",
+                            "PollForSourceChanges": "false"
+                        },
+                        "RunOrder": 1
+                      }
+                  ]
+                },
+                {
+                    "Name": "Release",
+                    "Actions":[
+                        {
+                            "Name": "ReleaseAction",
+                            "ActionTypeId": {
+                                "Category": "Deploy", 
+                                "Owner": "AWS", 
+                                "Version": "1", 
+                                "Provider": "CodeDeploy" 
+                              },
+                              "InputArtifacts": [ { "Name": "SourceOutput" }],
+                              "Configuration": { 
+                                "ApplicationName": {"Ref" : "CodeDeploySampleApp"}, 
+                                "DeploymentGroupName": {"Ref" : "DeploymentGroupSampleApp"} 
+                              }, 
+                              "RunOrder": 1
+                        }
+                    ]
+                }
+              ],
+              "ArtifactStore": { 
+                "Type": "S3",
+                "Location": { "Ref" : "S3Bucket" },
+                "EncryptionKey": {
+                  "Id": { "Ref": "KMSKeyArn" },
+                  "Type": "KMS"
+                }
+              }
+            }
+          }
+    }
+}
