@@ -4,31 +4,59 @@
     "Parameters":
     {
         "ArtifactStoreS3Location": {
-            "Description": "Name of S3 used as ArtifactStore",
+            "Description": "Name of S3 bucket used as ArtifactStore",
             "Type": "String",
             "MinLength": "3",
             "MaxLength": "63",
             "AllowedPattern": "[a-zA-Z0-9\\-\\.]+",
             "ConstraintDescription": "can contain only ASCII characters."
         },
-        "CodePipelineServiceRole": {
-          "Description": "ServiceRoleArn for CodePipeline",
+        "CodePipelineServiceRoleArn": {
+          "Description": "Service Role ARN for CodePipeline",
           "Type": "String",
-          "ConstraintDescription": "can contain only ASCII characters."
-        },
-        "CodeDeployServiceRole": {
-          "Description": "ServiceRoleArn for CodeDeploy deployment",
-          "Type": "String",
-          "ConstraintDescription": "can contain only ASCII characters."
+          "ConstraintDescription": "not a valid service role arn."
         },
         "KMSKeyArn": {
-          "Description": "KMS Key for S3 encryption",
+          "Description": "KMS Key ARN for S3 encryption",
           "Type": "String",
           "ConstraintDescription": "can contain only ASCII characters."
-        }
+        },
+        "ManagedPolicyArn": {
+          "Type": "String",
+          "Description": "CodeDeploy managed policy",
+          "Default": "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
+      }
     },
     "Resources":
     {
+      "RoleDeployment": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+            "Description": "Allows CodeDeploy to call AWS services such as Auto Scaling on your behalf.",
+            "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": [
+                                "codedeploy.amazonaws.com"
+                            ]
+                        },
+                        "Action": [
+                            "sts:AssumeRole"
+                        ]
+                    }
+                ]
+            },
+            "Path": "/",
+            "ManagedPolicyArns": [
+                {
+                    "Ref": "ManagedPolicyArn"
+                }
+            ]
+        }
+      },
       "S3Bucket" : {
         "Type" : "AWS::S3::Bucket",
 	      "DeletionPolicy": "Retain",
@@ -48,18 +76,18 @@
               "Properties":{
                   "ApplicationName": { "Ref": "CodeDeploySampleApp"},
                   "DeploymentGroupName": "SampleApp_DG",
-                  "ServiceRoleArn": { "Ref": "CodeDeployServiceRole" },
+                  "ServiceRoleArn": { "Fn::GetAtt" : [ "RoleDeployment", "Arn" ] },
                   "DeploymentConfigName": "CodeDeployDefault.OneAtATime",
                   "Ec2TagFilters" : [
                       { "Key" : "Name", "Value" : "Sample-instance", "Type" : "KEY_AND_VALUE" }, 
-                      { "Key" : "Environment", "Value" : "Development", "Type" : "KEY_AND_VALUE" }]
+                      { "Key" : "Environment", "Value" : "dev", "Type" : "KEY_AND_VALUE" }]
                   }
           },
           "CodePipelineSampleApp": {
             "Type": "AWS::CodePipeline::Pipeline",
             "Properties" : {
-              "Name" : "MyFirstPipeline",
-              "RoleArn" : { "Ref": "CodePipelineServiceRole" },
+              "Name" : "Development",
+              "RoleArn" : { "Ref": "CodePipelineServiceRoleArn" },
               "Stages" : [
                 {
                     "Name": "Source",

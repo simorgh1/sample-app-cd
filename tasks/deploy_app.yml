@@ -7,8 +7,7 @@
     template_format: json
     template_parameters:
       ArtifactStoreS3Location: "{{ artifactstores3 }}"
-      CodePipelineServiceRole: "{{ codepipelineservicerolearn }}"
-      CodeDeployServiceRole: "{{ codedeployservicerolearn }}"
+      CodePipelineServiceRoleArn: "{{ codepipelineservicerolearn }}"
       KMSKeyArn: "{{ kmskeyarn }}"
     tags:
       Environment: dev

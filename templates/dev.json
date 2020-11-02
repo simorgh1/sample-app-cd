@@ -2,7 +2,7 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Development Environment",
     "Parameters": {
-        "KeyName": {
+        "KeyPairName": {
             "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instance",
             "Type": "String",
             "MinLength": "3",
@@ -10,13 +10,10 @@
             "AllowedPattern": "[\\x20-\\x7E]*",
             "ConstraintDescription": "can contain only ASCII characters."
         },
-        "EC2RoleInstanceProfile": {
-            "Description": "Name of an existing Instance Profile Role with attached AmazonEC2RoleforAWSCodeDeploy Policy",
+        "ManagedPolicyEC2ServiceRoleArn": {
             "Type": "String",
-            "MinLength": "3",
-            "MaxLength": "255",
-            "AllowedPattern": "[\\x20-\\x7E]*",
-            "ConstraintDescription": "can contain only ASCII characters."
+            "Description": "CodeDeploy managed policy",
+            "Default": "arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforAWSCodeDeploy"
         }
     },
     "Mappings": {
@@ -25,6 +22,46 @@
         }
     },
     "Resources": {
+        "RoleEC2Deployment": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "Description": "Allows CodeDeploy to call AWS services such as Auto Scaling on your behalf.",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Path": "/",
+                "ManagedPolicyArns": [
+                    {
+                        "Ref": "ManagedPolicyEC2ServiceRoleArn"
+                    }
+                ]
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "InstanceProfileName": "EC2InstanceProfile",
+                "Path": "/",
+                "Roles": [
+                    {
+                        "Ref": "RoleEC2Deployment"
+                    }
+                ]
+            }
+        },
         "VPCApp": {
             "Type": "AWS::EC2::VPC",
             "Properties": {
@@ -53,9 +90,9 @@
         "Ec2Instance": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
-                "KeyName": {"Ref": "KeyName" },
+                "KeyName": {"Ref": "KeyPairName" },
                 "InstanceType": "t2.micro",
-                "IamInstanceProfile": { "Ref": "EC2RoleInstanceProfile" },
+                "IamInstanceProfile": { "Ref" : "EC2InstanceProfile" },
                 "Monitoring": "false",
                 "ImageId": { "Fn::FindInMap": [ "RegionMap", { "Ref": "AWS::Region" }, "AMI" ] },
                 "UserData": { "Fn::Base64": { "Fn::Join" : ["", [
@@ -65,7 +102,7 @@
                     "chmod +x ./install\n",
                     "sudo ./install auto \n"
                 ]]}},
-                "Tags": [{ "Key": "Name", "Value": "Sample-instance" }, { "Key": "Environment", "Value": "Development" }],
+                "Tags": [{ "Key": "Name", "Value": "Sample-instance" }, { "Key": "Environment", "Value": "dev" }],
                 "NetworkInterfaces": [
                     {
                         "DeleteOnTermination": "true",

@@ -6,8 +6,7 @@
     template: templates/dev.json
     template_format: json
     template_parameters:
-      KeyName: "{{ keyname }}"
-      EC2RoleInstanceProfile: "{{ ec2instanceprofile }}"
+      KeyPairName: "{{ keypairname }}"
     tags:
       Environment: dev
   register: cf_stack

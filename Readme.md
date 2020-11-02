@@ -4,9 +4,7 @@
 
 - Configured AWS CLI
 - CodeCommit Credentials and access for your account
-- EC2 Role for CodeDeploy with Policy AmazonEC2RoleforAWSCodeDeploy.
 - Service Role for CodePipeline
-- CodeDeploy Role with policy AWSCodeDeployRole
 - A Key Pair for accessing the EC2 instance
 
 ## Creating and using the CodeCommit Repository
@@ -14,7 +12,7 @@
 - Clone the Repo to your local folder
 
 ```bash
-> git clone https://github.com/simorgh1/aws-cf-templates/codestar-sampleapp.git .
+> git clone https://github.com/simorgh1/SampleApp.git .
 ```
 
 - Then run the create repository task in the app-deploy folder
