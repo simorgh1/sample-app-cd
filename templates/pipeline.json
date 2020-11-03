@@ -3,19 +3,6 @@
     "Description": "Creates Pipeline Infrastructure",
     "Parameters":
     {
-        "ArtifactStoreS3Location": {
-            "Description": "Name of S3 bucket used as ArtifactStore",
-            "Type": "String",
-            "MinLength": "3",
-            "MaxLength": "63",
-            "AllowedPattern": "[a-zA-Z0-9\\-\\.]+",
-            "ConstraintDescription": "can contain only ASCII characters."
-        },
-        "CodePipelineServiceRoleArn": {
-          "Description": "Service Role ARN for CodePipeline",
-          "Type": "String",
-          "ConstraintDescription": "not a valid service role arn."
-        },
         "KMSKeyArn": {
           "Description": "KMS Key ARN for S3 encryption",
           "Type": "String",
@@ -29,9 +16,219 @@
     },
     "Resources":
     {
+      "RoleCodePipelineDeployment": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+          "RoleName": "CodePipelineServiceRole",
+          "Description": "Allows CodePipeline to call AWS services such as Auto Scaling on your behalf.",
+          "AssumeRolePolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                  {
+                      "Effect": "Allow",
+                      "Principal": {
+                          "Service": [
+                              "codepipeline.amazonaws.com"
+                          ]
+                      },
+                      "Action": [
+                          "sts:AssumeRole"
+                      ]
+                  }
+              ]
+          },
+          "Path": "/service-role/"
+      }
+  },
+  "CodePipelineServicePolicy":
+  {
+      "Type": "AWS::IAM::ManagedPolicy",
+      "Properties": {
+          "Description": "Policy used in trust relationship with CodePipeline",
+          "ManagedPolicyName": "CodePipelineSampleAppManagedPolicy",
+          "PolicyDocument": {
+              "Statement": [
+                  {
+                      "Action": [
+                          "iam:PassRole"
+                      ],
+                      "Resource": "*",
+                      "Effect": "Allow",
+                      "Condition": {
+                          "StringEqualsIfExists": {
+                              "iam:PassedToService": [
+                                  "cloudformation.amazonaws.com",
+                                  "elasticbeanstalk.amazonaws.com",
+                                  "ec2.amazonaws.com",
+                                  "ecs-tasks.amazonaws.com"
+                              ]
+                          }
+                      }
+                  },
+                  {
+                      "Action": [
+                          "codecommit:CancelUploadArchive",
+                          "codecommit:GetBranch",
+                          "codecommit:GetCommit",
+                          "codecommit:GetUploadArchiveStatus",
+                          "codecommit:UploadArchive"
+                      ],
+                      "Resource": "*",
+                      "Effect": "Allow"
+                  },
+                  {
+                      "Action": [
+                          "codedeploy:CreateDeployment",
+                          "codedeploy:GetApplication",
+                          "codedeploy:GetApplicationRevision",
+                          "codedeploy:GetDeployment",
+                          "codedeploy:GetDeploymentConfig",
+                          "codedeploy:RegisterApplicationRevision"
+                      ],
+                      "Resource": "*",
+                      "Effect": "Allow"
+                  },
+                  {
+                      "Action": [
+                          "codestar-connections:UseConnection"
+                      ],
+                      "Resource": "*",
+                      "Effect": "Allow"
+                  },
+                  {
+                      "Action": [
+                          "elasticbeanstalk:*",
+                          "ec2:*",
+                          "elasticloadbalancing:*",
+                          "autoscaling:*",
+                          "cloudwatch:*",
+                          "s3:*",
+                          "sns:*",
+                          "cloudformation:*",
+                          "rds:*",
+                          "sqs:*",
+                          "ecs:*"
+                      ],
+                      "Resource": "*",
+                      "Effect": "Allow"
+                  },
+                  {
+                      "Action": [
+                          "lambda:InvokeFunction",
+                          "lambda:ListFunctions"
+                      ],
+                      "Resource": "*",
+                      "Effect": "Allow"
+                  },
+                  {
+                      "Action": [
+                          "opsworks:CreateDeployment",
+                          "opsworks:DescribeApps",
+                          "opsworks:DescribeCommands",
+                          "opsworks:DescribeDeployments",
+                          "opsworks:DescribeInstances",
+                          "opsworks:DescribeStacks",
+                          "opsworks:UpdateApp",
+                          "opsworks:UpdateStack"
+                      ],
+                      "Resource": "*",
+                      "Effect": "Allow"
+                  },
+                  {
+                      "Action": [
+                          "cloudformation:CreateStack",
+                          "cloudformation:DeleteStack",
+                          "cloudformation:DescribeStacks",
+                          "cloudformation:UpdateStack",
+                          "cloudformation:CreateChangeSet",
+                          "cloudformation:DeleteChangeSet",
+                          "cloudformation:DescribeChangeSet",
+                          "cloudformation:ExecuteChangeSet",
+                          "cloudformation:SetStackPolicy",
+                          "cloudformation:ValidateTemplate"
+                      ],
+                      "Resource": "*",
+                      "Effect": "Allow"
+                  },
+                  {
+                      "Action": [
+                          "codebuild:BatchGetBuilds",
+                          "codebuild:StartBuild",
+                          "codebuild:BatchGetBuildBatches",
+                          "codebuild:StartBuildBatch"
+                      ],
+                      "Resource": "*",
+                      "Effect": "Allow"
+                  },
+                  {
+                      "Effect": "Allow",
+                      "Action": [
+                          "devicefarm:ListProjects",
+                          "devicefarm:ListDevicePools",
+                          "devicefarm:GetRun",
+                          "devicefarm:GetUpload",
+                          "devicefarm:CreateUpload",
+                          "devicefarm:ScheduleRun"
+                      ],
+                      "Resource": "*"
+                  },
+                  {
+                      "Effect": "Allow",
+                      "Action": [
+                          "servicecatalog:ListProvisioningArtifacts",
+                          "servicecatalog:CreateProvisioningArtifact",
+                          "servicecatalog:DescribeProvisioningArtifact",
+                          "servicecatalog:DeleteProvisioningArtifact",
+                          "servicecatalog:UpdateProduct"
+                      ],
+                      "Resource": "*"
+                  },
+                  {
+                      "Effect": "Allow",
+                      "Action": [
+                          "cloudformation:ValidateTemplate"
+                      ],
+                      "Resource": "*"
+                  },
+                  {
+                      "Effect": "Allow",
+                      "Action": [
+                          "ecr:DescribeImages"
+                      ],
+                      "Resource": "*"
+                  },
+                  {
+                      "Effect": "Allow",
+                      "Action": [
+                          "states:DescribeExecution",
+                          "states:DescribeStateMachine",
+                          "states:StartExecution"
+                      ],
+                      "Resource": "*"
+                  },
+                  {
+                      "Effect": "Allow",
+                      "Action": [
+                          "appconfig:StartDeployment",
+                          "appconfig:StopDeployment",
+                          "appconfig:GetDeployment"
+                      ],
+                      "Resource": "*"
+                  }
+              ],
+              "Version": "2012-10-17"
+          },
+          "Roles": [
+              {
+                  "Ref": "RoleCodePipelineDeployment"
+              }
+          ]
+          }
+      },
       "RoleDeployment": {
         "Type": "AWS::IAM::Role",
         "Properties": {
+            "RoleName": "CodeDeployServiceRole",
             "Description": "Allows CodeDeploy to call AWS services such as Auto Scaling on your behalf.",
             "AssumeRolePolicyDocument": {
                 "Version": "2012-10-17",
@@ -49,7 +246,7 @@
                     }
                 ]
             },
-            "Path": "/",
+            "Path": "/service-role/",
             "ManagedPolicyArns": [
                 {
                     "Ref": "ManagedPolicyArn"
@@ -61,7 +258,7 @@
         "Type" : "AWS::S3::Bucket",
 	      "DeletionPolicy": "Retain",
         "Properties" : {
-           "BucketName" : { "Ref": "ArtifactStoreS3Location" }
+           "BucketName" : "codepipeline-artifactsstore-sampleapp"
          }  
         },
         "CodeDeploySampleApp": {
@@ -87,7 +284,7 @@
             "Type": "AWS::CodePipeline::Pipeline",
             "Properties" : {
               "Name" : "Development",
-              "RoleArn" : { "Ref": "CodePipelineServiceRoleArn" },
+              "RoleArn" : { "Fn::GetAtt" : [ "RoleCodePipelineDeployment", "Arn" ] },
               "Stages" : [
                 {
                     "Name": "Source",

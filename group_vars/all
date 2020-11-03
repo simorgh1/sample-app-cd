@@ -1,5 +1,3 @@
 ---
-artifactstores3: codepipeline-sampleapp
-codepipelineservicerolearn: arn:aws:iam::291221073406:role/service-role/AWSCodePipelineServiceRole-us-east-1-SampleApp-pipeline
-kmskeyarn: set your kms key arn here
+kmskeyarn: arn:aws:kms:us-east-1:291221073406:key/c02b5452-c23f-4198-bb58-3e73ba16779a
 keypairname: ec2-bahi

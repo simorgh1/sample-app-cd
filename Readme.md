@@ -4,7 +4,6 @@
 
 - Configured AWS CLI
 - CodeCommit Credentials and access for your account
-- Service Role for CodePipeline
 - A Key Pair for accessing the EC2 instance
 
 ## Creating and using the CodeCommit Repository

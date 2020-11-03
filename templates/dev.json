@@ -25,6 +25,7 @@
         "RoleEC2Deployment": {
             "Type": "AWS::IAM::Role",
             "Properties": {
+                "RoleName": "EC2DeploymentRole",
                 "Description": "Allows CodeDeploy to call AWS services such as Auto Scaling on your behalf.",
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
