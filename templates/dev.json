@@ -5,15 +5,41 @@
         "KeyPairName": {
             "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instance",
             "Type": "String",
-            "MinLength": "3",
-            "MaxLength": "255",
-            "AllowedPattern": "[\\x20-\\x7E]*",
             "ConstraintDescription": "can contain only ASCII characters."
         },
         "ManagedPolicyEC2ServiceRoleArn": {
             "Type": "String",
             "Description": "CodeDeploy managed policy",
             "Default": "arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforAWSCodeDeploy"
+        },
+        "Email": {
+            "Description": "Email address that will receive alerts.",
+            "Type": "String",
+            "Default": ""
+        },
+        "LogsRetentionInDays": {
+            "Description": "Specifies the number of days you want to retain log events.",
+            "Type": "Number",
+            "Default": 14,
+            "AllowedValues": [
+                1,
+                3,
+                5,
+                7,
+                14,
+                30,
+                60,
+                90,
+                120,
+                150,
+                180,
+                365,
+                400,
+                545,
+                731,
+                1827,
+                3653
+            ]
         }
     },
     "Mappings": {
@@ -21,7 +47,120 @@
             "us-east-1": { "AMI": "ami-032930428bf1abbff" }
         }
     },
+    "Conditions": {
+        "HasEmail": {
+            "Fn::Not": [ { "Fn::Equals": [ { "Ref": "Email" }, "" ] } ]
+        }
+    },
     "Resources": {
+        "Topic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {}
+        },
+        "TopicPolicy": {
+            "Type": "AWS::SNS::TopicPolicy",
+            "Properties": {
+                "PolicyDocument": {
+                    "Id": "Id1",
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Sid1",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "events.amazonaws.com",
+                                    "budgets.amazonaws.com",
+                                    "rds.amazonaws.com",
+                                    "s3.amazonaws.com",
+                                    "backup.amazonaws.com"
+                                ]
+                            },
+                            "Action": "sns:Publish",
+                            "Resource": { "Ref": "Topic" }
+                        },
+                        {
+                            "Sid": "Sid2",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": "*"
+                            },
+                            "Action": "sns:Publish",
+                            "Resource": {
+                                "Ref": "Topic"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceOwner": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "Sid3",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ses.amazonaws.com"
+                            },
+                            "Action": "sns:Publish",
+                            "Resource": {
+                                "Ref": "Topic"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:Referer": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Topics": [ { "Ref": "Topic" } ]
+            }
+        },
+        "FallbackTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {}
+        },
+        "NumberOfNotificationsFailedTooHighAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmDescription": "Alerts could not be delivered",
+                "Namespace": "AWS/SNS",
+                "MetricName": "NumberOfNotificationsFailed",
+                "Statistic": "Sum",
+                "Period": 60,
+                "EvaluationPeriods": 1,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Threshold": 0,
+                "AlarmActions": [ { "Ref": "FallbackTopic" } ],
+                "Dimensions": [
+                    {
+                        "Name": "TopicName",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "Topic",
+                                "TopicName"
+                            ]
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "EmailSubscription": {
+            "Condition": "HasEmail",
+            "Type": "AWS::SNS::Subscription",
+            "Properties": {
+                "Endpoint": {
+                    "Ref": "Email"
+                },
+                "Protocol": "email",
+                "TopicArn": { "Ref": "Topic" }
+            }
+        },
         "RoleEC2Deployment": {
             "Type": "AWS::IAM::Role",
             "Properties": {
@@ -33,13 +172,9 @@
                         {
                             "Effect": "Allow",
                             "Principal": {
-                                "Service": [
-                                    "ec2.amazonaws.com"
-                                ]
+                                "Service": [ "ec2.amazonaws.com" ]
                             },
-                            "Action": [
-                                "sts:AssumeRole"
-                            ]
+                            "Action": [ "sts:AssumeRole" ]
                         }
                     ]
                 },
@@ -47,6 +182,39 @@
                 "ManagedPolicyArns": [
                     {
                         "Ref": "ManagedPolicyEC2ServiceRoleArn"
+                    }
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "cloudwatch",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "cloudwatch:PutMetricData",
+                                    "Resource": "*",
+                                    "Condition": {
+                                        "StringEquals": {
+                                            "cloudwatch:namespace": { "Ref": "AWS::StackName" }
+                                        }
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "logs:DescribeLogStreams",
+                                        "logs:DescribeLogGroups"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [ "Logs", "Arn" ]
+                                    }
+                                }
+                            ]
+                        }
                     }
                 ]
             }
@@ -56,14 +224,10 @@
             "Properties": {
                 "InstanceProfileName": "EC2InstanceProfile",
                 "Path": "/",
-                "Roles": [
-                    {
-                        "Ref": "RoleEC2Deployment"
-                    }
-                ]
+                "Roles": [ { "Ref": "RoleEC2Deployment" } ]
             }
         },
-        "VPCApp": {
+        "VPCSampleApp": {
             "Type": "AWS::EC2::VPC",
             "Properties": {
                 "CidrBlock": "175.31.0.0/16",
@@ -79,7 +243,7 @@
                 "CidrBlock": "175.31.0.0/20",
                 "AvailabilityZone": "us-east-1a",
                 "VpcId": {
-                    "Ref": "VPCApp"
+                    "Ref": "VPCSampleApp"
                 },
                 "Tags": [{ "Key": "Name", "Value": "SubnetAZa" }] 
             }
@@ -88,21 +252,179 @@
             "Type": "AWS::EC2::InternetGateway",
             "Properties": {}
         },
+        "Logs": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "RetentionInDays": {
+                    "Ref": "LogsRetentionInDays"
+                }
+            }
+        },
         "Ec2Instance": {
             "Type": "AWS::EC2::Instance",
+            "Metadata": {
+                "AWS::CloudFormation::Init": {
+                    "configSets": {
+                        "default": [ "01_config_cfn", "02_setup_cloudwatch", "03_restart_amazon-cloudwatch-agent" ]
+                    },
+                    "01_config_cfn": {
+                        "files": {
+                            "/etc/cfn/cfn-hup.conf": {
+                                "content": {
+                                    "Fn::Sub": "[main]\nstack=${AWS::StackId}\nregion=${AWS::Region}\ninterval=1\n"
+                                },
+                                "mode": "000400",
+                                "owner": "root",
+                                "group": "root"
+                            },
+                            "/etc/cfn/hooks.d/cfn-auto-reloader.conf": {
+                                "content": {
+                                    "Fn::Sub": "[cfn-auto-reloader-hook]\ntriggers=post.update\npath=Resources.Ec2Instance.Metadata.AWS::CloudFormation::Init\naction=/opt/aws/bin/cfn-init --verbose --stack=${AWS::StackName} --region=${AWS::Region} --resource=Ec2Instance\nrunas=root\n"
+                                }
+                            }
+                        },
+                        "services": {
+                            "sysvinit": {
+                                "cfn-hup": {
+                                    "enabled": true,
+                                    "ensureRunning": true,
+                                    "files": [
+                                        "/etc/cfn/cfn-hup.conf",
+                                        "/etc/cfn/hooks.d/cfn-auto-reloader.conf"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "02_setup_cloudwatch": {
+                        "packages": {
+                            "rpm": {
+                                "cloudwatch": "https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm"
+                            }
+                        },
+                        "files": {
+                            "/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json": {
+                                "content": {
+                                    "Fn::Sub": "{\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [{\n           \"log_group_name\": \"${Logs}\",\n           \"file_path\": \"/var/log/amazon/amazon-cloudwatch-agent/amazon-cloudwatch-agent.log\",\n           \"log_stream_name\": \"{instance_id}/var/log/amazon/amazon-cloudwatch-agent/amazon-cloudwatch-agent.log\",\n           \"timestamp_format\": \"%Y-%m-%dT%H:%M:%S\"\n        }, {\n           \"log_group_name\": \"${Logs}\",\n           \"file_path\": \"/var/log/amazon/amazon-cloudwatch-agent/configuration-validation.log\",\n           \"log_stream_name\": \"{instance_id}/var/log/amazon/amazon-cloudwatch-agent/configuration-validation.log\",\n           \"timestamp_format\": \"%Y/%m/%d %H:%M:%S\"\n        }, {\n          \"log_group_name\": \"${Logs}\",\n          \"file_path\": \"/var/log/amazon/ssm/amazon-ssm-agent.log\",\n          \"log_stream_name\": \"{instance_id}/var/log/amazon/ssm/amazon-ssm-agent.log\",\n          \"timestamp_format\": \"%Y-%m-%d %H:%M:%S\"\n        }, {\n           \"log_group_name\": \"${Logs}\",\n           \"file_path\": \"/var/log/amazon/ssm/errors.log\",\n           \"log_stream_name\": \"{instance_id}/var/log/amazon/ssm/errors.log\",\n           \"timestamp_format\": \"%Y-%m-%d %H:%M:%S\"\n        }, {\n           \"log_group_name\": \"${Logs}\",\n           \"file_path\": \"/var/log/audit/audit.log\",\n           \"log_stream_name\": \"{instance_id}/var/log/audit/audit.log\"\n        }, {\n           \"log_group_name\": \"${Logs}\",\n           \"file_path\": \"/var/log/boot.log\",\n           \"log_stream_name\": \"{instance_id}/var/log/boot.log\"\n        }, {\n           \"log_group_name\": \"${Logs}\",\n           \"file_path\": \"/var/log/cfn-hup.log\",\n           \"log_stream_name\": \"{instance_id}/var/log/cfn-hup.log\",\n           \"timestamp_format\": \"%Y-%m-%d %H:%M:%S\"\n        }, {\n           \"log_group_name\": \"${Logs}\",\n           \"file_path\": \"/var/log/cfn-init-cmd.log\",\n           \"log_stream_name\": \"{instance_id}/var/log/cfn-init-cmd.log\",\n           \"timestamp_format\": \"%Y-%m-%d %H:%M:%S\"\n        }, {\n           \"log_group_name\": \"${Logs}\",\n           \"file_path\": \"/var/log/cfn-init.log\",\n           \"log_stream_name\": \"{instance_id}/var/log/cfn-init.log\",\n           \"timestamp_format\": \"%Y-%m-%d %H:%M:%S\"\n        }, {\n           \"log_group_name\": \"${Logs}\",\n           \"file_path\": \"/var/log/cfn-wire.log\",\n           \"log_stream_name\": \"{instance_id}/var/log/cfn-wire.log\",\n           \"timestamp_format\": \"%Y-%m-%d %H:%M:%S\"\n        }, {\n           \"log_group_name\": \"${Logs}\",\n           \"file_path\": \"/var/log/cloud-init-output.log\",\n           \"log_stream_name\": \"{instance_id}/var/log/cloud-init-output.log\"\n        }, {\n           \"log_group_name\": \"${Logs}\",\n           \"file_path\": \"/var/log/cloud-init.log\",\n           \"log_stream_name\": \"{instance_id}/var/log/cloud-init.log\",\n           \"timestamp_format\": \"%b %d %H:%M:%S\"\n        }, {\n           \"log_group_name\": \"${Logs}\",\n           \"file_path\": \"/var/log/cron\",\n           \"log_stream_name\": \"{instance_id}/var/log/cron\",\n           \"timestamp_format\": \"%b %-d %H:%M:%S\"\n        }, {\n           \"log_group_name\": \"${Logs}\",\n           \"file_path\": \"/var/log/dmesg\",\n           \"log_stream_name\": \"{instance_id}/var/log/dmesg\"\n        }, {\n           \"log_group_name\": \"${Logs}\",\n           \"file_path\": \"/var/log/grubby_prune_debug\",\n           \"log_stream_name\": \"{instance_id}/var/log/grubby_prune_debug\"\n        }, {\n           \"log_group_name\": \"${Logs}\",\n           \"file_path\": \"/var/log/maillog\",\n           \"log_stream_name\": \"{instance_id}/var/log/maillog\",\n           \"timestamp_format\": \"%b %-d %H:%M:%S\"\n        }, {\n           \"log_group_name\": \"${Logs}\",\n           \"file_path\": \"/var/log/messages\",\n           \"log_stream_name\": \"{instance_id}/var/log/messages\",\n           \"timestamp_format\": \"%b %-d %H:%M:%S\"\n        }, {\n           \"log_group_name\": \"${Logs}\",\n           \"file_path\": \"/var/log/secure\",\n           \"log_stream_name\": \"{instance_id}/var/log/secure\",\n           \"timestamp_format\": \"%b %-d %H:%M:%S\"\n        }, {\n           \"log_group_name\": \"${Logs}\",\n           \"file_path\": \"/var/log/yum.log\",\n           \"log_stream_name\": \"{instance_id}/var/log/yum.log\",\n           \"timestamp_format\": \"%b %d %H:%M:%S\"\n        }]\n      }\n    }\n  },\n  \"metrics\": {\n    \"namespace\": \"${AWS::StackName}\",\n    \"append_dimensions\": {\n      \"InstanceId\": \"${!aws:InstanceId}\"\n    },\n    \"metrics_collected\": {\n      \"mem\": {\n        \"measurement\": [\n          \"mem_used_percent\"\n        ]\n      },\n      \"swap\": {\n        \"measurement\": [\n          \"swap_used_percent\"\n        ]\n      },\n      \"disk\": {\n        \"resources\": [\n          \"/\"\n        ],\n        \"measurement\": [\n          \"used_percent\"\n        ],\n        \"drop_device\": true\n      }\n    }\n  }\n}\n"
+                                },
+                                "mode": "000644",
+                                "owner": "root",
+                                "group": "root"
+                            }
+                        }
+                    },
+                    "03_restart_amazon-cloudwatch-agent": {
+                        "commands": {
+                            "01_stop_service": {
+                                "command": "/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a stop"
+                            },
+                            "02_start_service": {
+                                "command": "/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s"
+                            }
+                        }
+                    },
+                    "install_logs": {
+                        "packages" : {
+                          "yum" : {
+                            "awslogs" : []
+                          }
+                        },
+            
+                        "files": {
+                          "/etc/awslogs/awslogs.conf": {
+                            "content": { "Fn::Join": [ "", [
+                              "[general]\n",
+                              "state_file= /var/awslogs/state/agent-state\n",
+            
+                              "[/var/log/cloud-init.log]\n",
+                              "file = /var/log/cloud-init.log\n",
+                              "log_group_name = ", { "Ref": "Logs" }, "\n",
+                              "log_stream_name = {instance_id}/cloud-init.log\n",
+                              "datetime_format = \n",
+            
+                              "[/var/log/cloud-init-output.log]\n",
+                              "file = /var/log/cloud-init-output.log\n",
+                              "log_group_name = ", { "Ref": "Logs" }, "\n",
+                              "log_stream_name = {instance_id}/cloud-init-output.log\n",
+                              "datetime_format = \n",
+            
+                              "[/var/log/cfn-init.log]\n",
+                              "file = /var/log/cfn-init.log\n",
+                              "log_group_name = ", { "Ref": "Logs" }, "\n",
+                              "log_stream_name = {instance_id}/cfn-init.log\n",
+                              "datetime_format = \n",
+            
+                              "[/var/log/cfn-hup.log]\n",
+                              "file = /var/log/cfn-hup.log\n",
+                              "log_group_name = ", { "Ref": "Logs" }, "\n",
+                              "log_stream_name = {instance_id}/cfn-hup.log\n",
+                              "datetime_format = \n",
+            
+                              "[/var/log/cfn-wire.log]\n",
+                              "file = /var/log/cfn-wire.log\n",
+                              "log_group_name = ", { "Ref": "Logs" }, "\n",
+                              "log_stream_name = {instance_id}/cfn-wire.log\n",
+                              "datetime_format = \n",
+            
+                              "[/var/log/httpd]\n",
+                              "file = /var/log/httpd/*\n",
+                              "log_group_name = ", { "Ref": "Logs" }, "\n",
+                              "log_stream_name = {instance_id}/httpd\n",
+                              "datetime_format = %d/%b/%Y:%H:%M:%S\n"
+                            ] ] },
+                            "mode": "000444",
+                            "owner": "root",
+                            "group": "root"
+                          },
+                          "/etc/awslogs/awscli.conf": {
+                            "content": { "Fn::Join": [ "", [
+                              "[plugins]\n",
+                              "cwlogs = cwlogs\n",
+                              "[default]\n",
+                              "region = ", { "Ref" : "AWS::Region" }, "\n"
+                            ] ] },
+                            "mode": "000444",
+                            "owner": "root",
+                            "group": "root"
+                          }
+                        },
+                        "commands" : {
+                          "01_create_state_directory" : {
+                            "command" : "mkdir -p /var/awslogs/state"
+                          }
+                        },
+                        "services" : {
+                          "sysvinit" : {
+                            "awslogs"    : { "enabled" : "true", "ensureRunning" : "true",
+                                             "files" : [ "/etc/awslogs/awslogs.conf" ] }
+                          }
+                        }
+                      }
+                }
+            },
             "Properties": {
                 "KeyName": {"Ref": "KeyPairName" },
                 "InstanceType": "t2.micro",
                 "IamInstanceProfile": { "Ref" : "EC2InstanceProfile" },
                 "Monitoring": "false",
                 "ImageId": { "Fn::FindInMap": [ "RegionMap", { "Ref": "AWS::Region" }, "AMI" ] },
-                "UserData": { "Fn::Base64": { "Fn::Join" : ["", [
-                    "#!/bin/bash\n",
-                    "sudo yum update -y\n",
-                    "wget https://aws-codedeploy-us-east-1.s3.us-east-1.amazonaws.com/latest/install \n",
-                    "chmod +x ./install\n",
-                    "sudo ./install auto \n"
-                ]]}},
+                "UserData": { 
+                    "Fn::Base64": { 
+                        "Fn::Join" : ["", 
+                            [
+                            "#!/bin/bash -ex\n",
+                            "sudo yum update -y\n",
+                            "wget https://aws-codedeploy-", { "Ref": "AWS::Region" } ,".s3.", { "Ref": "AWS::Region" } ,".amazonaws.com/latest/install \n",
+                            "chmod +x ./install\n",
+                            "sudo ./install auto \n",
+                            {
+                                "Fn::Sub": "trap '/opt/aws/bin/cfn-signal -e 1 --region ${AWS::Region} --stack ${AWS::StackName} --resource Ec2Instance' ERR\n/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource Ec2Instance --region ${AWS::Region}\n/opt/aws/bin/cfn-signal -e 0 --region ${AWS::Region} --stack ${AWS::StackName} --resource Ec2Instance\n"
+
+                            }
+                            ]
+                        ]
+                    }
+                },
                 "Tags": [{ "Key": "Name", "Value": "Sample-instance" }, { "Key": "Environment", "Value": "dev" }],
                 "NetworkInterfaces": [
                     {
@@ -116,11 +438,107 @@
                 ]
             }
         },
+        "RecoveryAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmDescription": "Recovering instance when underlying hardware fails.",
+                "Namespace": "AWS/EC2",
+                "MetricName": "StatusCheckFailed_System",
+                "Statistic": "Minimum",
+                "Period": 60,
+                "EvaluationPeriods": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Threshold": 0,
+                "AlarmActions": [
+                    {
+                        "Fn::Sub": "arn:aws:automate:${AWS::Region}:ec2:recover"
+                    }
+                ],
+                "Dimensions": [
+                    {
+                        "Name": "InstanceId",
+                        "Value": { "Ref": "Ec2Instance" }
+                    }
+                ]
+            }
+        },
+        "CPUTooHighAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmDescription": "Average CPU utilization over last 10 minutes higher than 80%",
+                "Namespace": "AWS/EC2",
+                "MetricName": "CPUUtilization",
+                "Statistic": "Average",
+                "Period": 600,
+                "EvaluationPeriods": 1,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Threshold": 80,
+                "AlarmActions": [ { "Ref": "Topic" } ],
+                "Dimensions": [
+                    {
+                        "Name": "InstanceId",
+                        "Value": { "Ref": "Ec2Instance" }
+                    }
+                ]
+            }
+        },
+        "MemoryTooHighAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmDescription": "Average memory utilization over last 10 minutes higher than 80%",
+                "Namespace": {
+                    "Ref": "AWS::StackName"
+                },
+                "MetricName": "mem_used_percent",
+                "Statistic": "Average",
+                "Period": 600,
+                "EvaluationPeriods": 1,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Threshold": 80,
+                "AlarmActions": [ { "Ref": "Topic" } ],
+                "Dimensions": [
+                    {
+                        "Name": "InstanceId",
+                        "Value": { "Ref": "Ec2Instance" }
+                    }
+                ]
+            }
+        },
+        "DiskTooHighAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmDescription": "Average disk utilization over last 10 minutes higher than 80%",
+                "Namespace": {
+                    "Ref": "AWS::StackName"
+                },
+                "MetricName": "disk_used_percent",
+                "Statistic": "Average",
+                "Period": 600,
+                "EvaluationPeriods": 1,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Threshold": 80,
+                "AlarmActions": [ { "Ref": "Topic" } ],
+                "Dimensions": [
+                    {
+                        "Name": "InstanceId",
+                        "Value": { "Ref": "Ec2Instance" }
+                    },
+                    {
+                        "Name": "fstype",
+                        "Value": "xfs"
+                    },
+                    {
+                        "Name": "path",
+                        "Value": "/"
+                    }
+                ]
+            }
+        },
         "SecurityGroupSampleApp": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupDescription": "SecurityGroup Sample App",
-                "VpcId": { "Ref": "VPCApp" },
+                "VpcId": { "Ref": "VPCSampleApp" },
                 "Tags": [{ "Key": "Name", "Value": "SG_SampleApp" }]
             }
         },
@@ -128,7 +546,7 @@
             "Type": "AWS::EC2::VPCGatewayAttachment",
             "Properties": {
                 "VpcId": {
-                    "Ref": "VPCApp"
+                    "Ref": "VPCSampleApp"
                 },
                 "InternetGatewayId": {
                     "Ref": "InternetGateway"
@@ -140,7 +558,7 @@
             "Type": "AWS::EC2::RouteTable",
             "Properties": {
                 "VpcId": {
-                    "Ref": "VPCApp"
+                    "Ref": "VPCSampleApp"
                 },
                 "Tags": [{ "Key": "Name", "Value": "RT_Public" }]
             }
@@ -202,23 +620,34 @@
     },
     "Outputs": {
         "VPCId": {
-            "Description": "VPCId of the newly created VPC",
-            "Value": { "Ref": "VPCApp" }
+            "Description": "VPCId of the newly created VPC.",
+            "Value": { "Ref": "VPCSampleApp" }
+        },
+        "StackName": {
+            "Description": "Stack name.",
+            "Value": {
+                "Fn::Sub": "${AWS::StackName}"
+            }
         },
         "InstanceId": {
-            "Description": "InstanceId of the newly created EC2 instance",
-            "Value": { "Ref": "Ec2Instance" }
+            "Description": "InstanceId of the newly created EC2 instance.",
+            "Value": { "Ref": "Ec2Instance" },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-InstanceId"
+                }
+            }
         },
         "AZ": {
-            "Description": "Availability Zone of the newly created EC2 instance",
+            "Description": "Availability Zone of the newly created EC2 instance.",
             "Value": { "Fn::GetAtt": [ "Ec2Instance", "AvailabilityZone" ] }
         },
         "PublicIP": {
-            "Description": "Public IP address of the newly created EC2 instance",
+            "Description": "Public IP address of the newly created EC2 instance.",
             "Value": { "Fn::GetAtt": [ "Ec2Instance", "PublicIp" ] }
         },
         "PublicDNS": {
-            "Description": "Public DNSName of the newly created EC2 instance",
+            "Description": "Public DNSName of the newly created EC2 instance.",
             "Value": { "Fn::GetAtt": [ "Ec2Instance", "PublicDnsName" ] }
         }
     }
