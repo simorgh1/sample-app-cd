@@ -1,4 +1,5 @@
 ---
-kmskeyarn: arn:aws:kms:us-east-1:291221073406:key/c02b5452-c23f-4198-bb58-3e73ba16779a
-keypairname: ec2-bahi
-email: bahramjan1@hotmail.com
+kmskeyarn: kms s3 key arn here
+keypairname: existing KeyPair name
+email: your email
+githubtoken: githun oauth token here

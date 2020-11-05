@@ -12,7 +12,12 @@
           "Type": "String",
           "Description": "CodeDeploy managed policy",
           "Default": "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
-      }
+        },
+        "GithubToken": {
+          "Description": "Existing github oauth token",
+          "Type": "String",
+          "ConstraintDescription": "must be the existing github oauth token."
+        }
     },
     "Resources":
     {
@@ -293,15 +298,17 @@
                         "Name": "SourceAction",
                         "ActionTypeId": { 
                             "Category": "Source", 
-                            "Owner": "AWS",
+                            "Owner": "ThirdParty",
                             "Version": "1", 
-                            "Provider": "CodeCommit"
+                            "Provider": "GitHub"
                         },
                         "OutputArtifacts": [ { "Name": "SourceOutput" }],
                         "Configuration": {
-                            "RepositoryName": "MyDemoRepo",
-                            "BranchName": "master",
-                            "PollForSourceChanges": "false"
+                            "OAuthToken": { "Ref": "GithubToken" },
+                            "Branch": "master",
+                            "PollForSourceChanges": "true",
+                            "Owner": "simorgh1",
+                            "Repo": "SampleApp"
                         },
                         "RunOrder": 1
                       }

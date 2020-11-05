@@ -1,0 +1,76 @@
+{
+    "pipeline": {
+        "name": "Development",
+        "roleArn": "arn:aws:iam::291221073406:role/service-role/CodePipelineServiceRole",
+        "artifactStore": {
+            "type": "S3",
+            "location": "codepipeline-artifactsstore-sampleapp",
+            "encryptionKey": {
+                "id": "arn:aws:kms:us-east-1:291221073406:key/c02b5452-c23f-4198-bb58-3e73ba16779a",
+                "type": "KMS"
+            }
+        },
+        "stages": [
+            {
+                "name": "Source",
+                "actions": [
+                    {
+                        "name": "SourceAction",
+                        "actionTypeId": {
+                            "category": "Source",
+                            "owner": "ThirdParty",
+                            "provider": "GitHub",
+                            "version": "1"
+                        },
+                        "runOrder": 1,
+                        "configuration": {
+                            "Branch": "master",
+                            "OAuthToken": "****",
+                            "Owner": "simorgh1",
+                            "PollForSourceChanges": "true",
+                            "Repo": "SampleApp"
+                        },
+                        "outputArtifacts": [
+                            {
+                                "name": "SourceOutput"
+                            }
+                        ],
+                        "inputArtifacts": [],
+                        "region": "us-east-1"
+                    }
+                ]
+            },
+            {
+                "name": "Release",
+                "actions": [
+                    {
+                        "name": "ReleaseAction",
+                        "actionTypeId": {
+                            "category": "Deploy",
+                            "owner": "AWS",
+                            "provider": "CodeDeploy",
+                            "version": "1"
+                        },
+                        "runOrder": 1,
+                        "configuration": {
+                            "ApplicationName": "SampleApp",
+                            "DeploymentGroupName": "SampleApp_DG"
+                        },
+                        "outputArtifacts": [],
+                        "inputArtifacts": [
+                            {
+                                "name": "SourceOutput"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ],
+        "version": 2
+    },
+    "metadata": {
+        "pipelineArn": "arn:aws:codepipeline:us-east-1:291221073406:Development",
+        "created": "2020-11-05T15:10:51.588000+01:00",
+        "updated": "2020-11-05T15:13:19.665000+01:00"
+    }
+}
