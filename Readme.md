@@ -1,6 +1,6 @@
 # CodePipeline using Github as source
 
-This SampleApp is hosted in the Github repo [SampleApp](https://github.com/simorgh1/SampleApp). The CodePipeline demo creates an Environment for hosting the SampleApp in EC2 and then the Pipeline which will deploy the application using CodeDeploy.
+This SampleApp is hosted in the Github repo [sample-app-html](https://github.com/simorgh1/sample-app-html). The CodePipeline demo creates an Environment for hosting the SampleApp in EC2 and then the Pipeline which will deploy the application using CodeDeploy.
 
 ### Requirements
 
